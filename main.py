@@ -282,13 +282,7 @@ async def main():
         current_time = pygame.time.get_ticks()
         
         # Handle events
-        events = pygame.event.get()
-        
-        # Debug: print all events untuk cek apa yang detected
-        if events:
-            print(f"📋 Events detected: {[e.type for e in events]}")
-        
-        for event in events:
+        for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
             
@@ -312,23 +306,10 @@ async def main():
                     unlock_audio()
                 else:
                     print("✅ Audio already unlocked")
-            
-            # PENTING: Tambah MOUSEBUTTONUP untuk compatibility
-            elif event.type == pygame.MOUSEBUTTONUP:
-                print(f"🖱️ Mouse released at: {event.pos}")
-                if not audio_unlocked:
-                    print("🔄 Attempting to unlock audio via mouse release...")
-                    unlock_audio()
         
         # ============ MOVEMENT ============
         if not jumpscare_active and not game_won:
             keys = pygame.key.get_pressed()
-            
-            # Unlock audio saat pertama kali gerak (fallback)
-            if not audio_unlocked and any([keys[pygame.K_UP], keys[pygame.K_DOWN], 
-                                           keys[pygame.K_LEFT], keys[pygame.K_RIGHT]]):
-                print("🔄 Auto-unlocking audio on movement...")
-                unlock_audio()
             
             if current_time - last_move_time > move_delay:
                 new_x, new_y = player_x, player_y
