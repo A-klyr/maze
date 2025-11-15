@@ -131,7 +131,16 @@ def unlock_audio():
     """Unlock audio dengan reinit mixer"""
     global audio_unlocked, jumpscare_sounds
     
-    if not MIXER_AVAILABLE or audio_unlocked:
+    print("🚀 unlock_audio() called!")
+    print(f"   MIXER_AVAILABLE: {MIXER_AVAILABLE}")
+    print(f"   audio_unlocked: {audio_unlocked}")
+    
+    if not MIXER_AVAILABLE:
+        print("❌ Mixer not available!")
+        return
+    
+    if audio_unlocked:
+        print("⚠️ Audio already unlocked!")
         return
     
     try:
@@ -139,10 +148,16 @@ def unlock_audio():
         
         # Reinit mixer untuk unlock browser audio context
         pygame.mixer.quit()
+        print("   - Mixer quit")
+        
         pygame.mixer.init()
+        print("   - Mixer init")
         
         # Reload sounds
+        old_count = len(jumpscare_sounds)
         jumpscare_sounds.clear()
+        print(f"   - Cleared {old_count} old sounds")
+        
         sound_files = [
             'assets/sounds/fuzzy-jumpscare-80560.wav',
             'assets/sounds/jump-scare-sound-2-82831.wav',
@@ -153,14 +168,17 @@ def unlock_audio():
             try:
                 snd = pygame.mixer.Sound(sound_path)
                 jumpscare_sounds.append(snd)
+                print(f"   ✅ Reloaded: {sound_path}")
             except Exception as e:
-                print(f"❌ Failed to reload {sound_path}: {e}")
+                print(f"   ❌ Failed to reload {sound_path}: {e}")
         
         audio_unlocked = True
-        print(f"🔊 Audio unlocked! Loaded {len(jumpscare_sounds)} sounds")
+        print(f"🎉 Audio unlocked! Loaded {len(jumpscare_sounds)} sounds")
         
     except Exception as e:
-        print(f"⚠️ Audio unlock failed: {e}")
+        print(f"💥 Audio unlock FAILED: {e}")
+        import traceback
+        traceback.print_exc()
 
 # ==== LOAD BEST TIMES ====
 def load_best_times():
@@ -264,26 +282,53 @@ async def main():
         current_time = pygame.time.get_ticks()
         
         # Handle events
-        for event in pygame.event.get():
+        events = pygame.event.get()
+        
+        # Debug: print all events untuk cek apa yang detected
+        if events:
+            print(f"📋 Events detected: {[e.type for e in events]}")
+        
+        for event in events:
             if event.type == pygame.QUIT:
                 running = False
             
             elif event.type == pygame.KEYDOWN:
+                print(f"⌨️ Key pressed: {event.key}")
                 # Unlock audio on first keypress
                 if not audio_unlocked:
+                    print("🔄 Attempting to unlock audio via keyboard...")
                     unlock_audio()
+                else:
+                    print("✅ Audio already unlocked")
                 
                 if event.key == pygame.K_r and game_won:
                     init_game_state()
             
             elif event.type == pygame.MOUSEBUTTONDOWN:
+                print(f"🖱️ Mouse clicked at: {event.pos}")
                 # Unlock audio on first click
                 if not audio_unlocked:
+                    print("🔄 Attempting to unlock audio via mouse...")
+                    unlock_audio()
+                else:
+                    print("✅ Audio already unlocked")
+            
+            # PENTING: Tambah MOUSEBUTTONUP untuk compatibility
+            elif event.type == pygame.MOUSEBUTTONUP:
+                print(f"🖱️ Mouse released at: {event.pos}")
+                if not audio_unlocked:
+                    print("🔄 Attempting to unlock audio via mouse release...")
                     unlock_audio()
         
         # ============ MOVEMENT ============
         if not jumpscare_active and not game_won:
             keys = pygame.key.get_pressed()
+            
+            # Unlock audio saat pertama kali gerak (fallback)
+            if not audio_unlocked and any([keys[pygame.K_UP], keys[pygame.K_DOWN], 
+                                           keys[pygame.K_LEFT], keys[pygame.K_RIGHT]]):
+                print("🔄 Auto-unlocking audio on movement...")
+                unlock_audio()
             
             if current_time - last_move_time > move_delay:
                 new_x, new_y = player_x, player_y
