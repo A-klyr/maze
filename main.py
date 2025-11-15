@@ -66,6 +66,7 @@ jumpscare_active = False
 jumpscare_start_time = 0
 current_jumpscare_img = None
 current_jumpscare_sound = None
+audio_unlocked = False  # Flag untuk audio unlock
 
 # ==== ASYNC ASSET LOADING (PENTING UNTUK PYGBAG) ====
 async def load_assets():
@@ -208,6 +209,7 @@ async def main():
     global start_time, game_started, game_won, final_time
     global last_move_time, best_times
     global current_jumpscare_img, current_jumpscare_sound
+    global audio_unlocked
     
     # Load assets FIRST (async)
     await load_assets()
@@ -230,8 +232,35 @@ async def main():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
+                # ========== UNLOCK AUDIO SAAT USER TEKAN TOMBOL ==========
+                if not audio_unlocked and MIXER_AVAILABLE and len(jumpscare_sounds) > 0:
+                    try:
+                        test_sound = jumpscare_sounds[0]
+                        test_sound.set_volume(0.0)
+                        test_sound.play()
+                        test_sound.stop()
+                        test_sound.set_volume(1.0)
+                        audio_unlocked = True
+                        print("🔊 Audio unlocked by keyboard!")
+                    except Exception as e:
+                        print(f"⚠️ Audio unlock failed: {e}")
+                
                 if event.key == pygame.K_r and game_won:
                     init_game_state()
+            
+            # ========== UNLOCK AUDIO DENGAN MOUSE CLICK ==========
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if not audio_unlocked and MIXER_AVAILABLE and len(jumpscare_sounds) > 0:
+                    try:
+                        test_sound = jumpscare_sounds[0]
+                        test_sound.set_volume(0.0)
+                        test_sound.play()
+                        test_sound.stop()
+                        test_sound.set_volume(1.0)
+                        audio_unlocked = True
+                        print("🔊 Audio unlocked by mouse click!")
+                    except Exception as e:
+                        print(f"⚠️ Audio unlock failed: {e}")
         
         # ============ MOVEMENT ============
         if not jumpscare_active and not game_won:
@@ -275,9 +304,14 @@ async def main():
                     current_jumpscare_img = random.choice(jumpscare_images)
                     print(f"👻 JUMPSCARE at ({player_x}, {player_y})!")
                     
-                    if MIXER_AVAILABLE and len(jumpscare_sounds) > 0:
+                    # Play sound HANYA jika audio sudah unlocked
+                    if audio_unlocked and MIXER_AVAILABLE and len(jumpscare_sounds) > 0:
                         current_jumpscare_sound = random.choice(jumpscare_sounds)
+                        current_jumpscare_sound.set_volume(0.8)
                         current_jumpscare_sound.play()
+                        print("🔊 Playing jumpscare sound!")
+                    elif not audio_unlocked:
+                        print("⚠️ Audio not unlocked - click screen first!")
         
         # Handle jumpscare duration
         if jumpscare_active and current_time - jumpscare_start_time > 1500:
@@ -312,17 +346,17 @@ async def main():
                 timer_text = font_small.render(f"Time: {elapsed:.2f}s", True, WHITE)
                 screen.blit(timer_text, (10, ui_y + 10))
             
-            # Jumpscare counter (debug info)
-            # js_text = font_small.render(
-            #     f"Jumpscares: {len(triggered_jumpscares)}/{len(jumpscare_positions)}", 
-            #     True, WHITE
-            # )
-            # screen.blit(js_text, (10, ui_y + 40))
-            
             # Best time
             if best_times:
                 best_text = font_small.render(f"Best: {best_times[0]:.2f}s", True, YELLOW)
                 screen.blit(best_text, (SCREEN_WIDTH - 150, ui_y + 10))
+            
+            # Audio warning indicator (blink)
+            if not audio_unlocked and MIXER_AVAILABLE:
+                if (current_time // 500) % 2 == 0:  # Blink every 500ms
+                    audio_warn = font_small.render("Click or Press key to enable sound", True, YELLOW)
+                    audio_rect = audio_warn.get_rect(center=(SCREEN_WIDTH // 2, ui_y + 70))
+                    screen.blit(audio_warn, audio_rect)
             
             # Check win
             if player_x == finish_x and player_y == finish_y and not game_won:
