@@ -126,6 +126,42 @@ async def load_assets():
         print(f"⚠️ Asset loading error: {e}")
         assets_loaded = False
 
+# ==== UNLOCK AUDIO FUNCTION ====
+def unlock_audio():
+    """Unlock audio dengan reinit mixer"""
+    global audio_unlocked, jumpscare_sounds
+    
+    if not MIXER_AVAILABLE or audio_unlocked:
+        return
+    
+    try:
+        print("🔄 Reinitializing audio...")
+        
+        # Reinit mixer untuk unlock browser audio context
+        pygame.mixer.quit()
+        pygame.mixer.init()
+        
+        # Reload sounds
+        jumpscare_sounds.clear()
+        sound_files = [
+            'assets/sounds/fuzzy-jumpscare-80560.wav',
+            'assets/sounds/jump-scare-sound-2-82831.wav',
+            'assets/sounds/five-nights-at-freddys-full-scream-sound_2.wav'
+        ]
+        
+        for sound_path in sound_files:
+            try:
+                snd = pygame.mixer.Sound(sound_path)
+                jumpscare_sounds.append(snd)
+            except Exception as e:
+                print(f"❌ Failed to reload {sound_path}: {e}")
+        
+        audio_unlocked = True
+        print(f"🔊 Audio unlocked! Loaded {len(jumpscare_sounds)} sounds")
+        
+    except Exception as e:
+        print(f"⚠️ Audio unlock failed: {e}")
+
 # ==== LOAD BEST TIMES ====
 def load_best_times():
     global best_times
@@ -231,36 +267,19 @@ async def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            
             elif event.type == pygame.KEYDOWN:
-                # ========== UNLOCK AUDIO SAAT USER TEKAN TOMBOL ==========
-                if not audio_unlocked and MIXER_AVAILABLE and len(jumpscare_sounds) > 0:
-                    try:
-                        test_sound = jumpscare_sounds[0]
-                        test_sound.set_volume(0.0)
-                        test_sound.play()
-                        test_sound.stop()
-                        test_sound.set_volume(1.0)
-                        audio_unlocked = True
-                        print("🔊 Audio unlocked by keyboard!")
-                    except Exception as e:
-                        print(f"⚠️ Audio unlock failed: {e}")
+                # Unlock audio on first keypress
+                if not audio_unlocked:
+                    unlock_audio()
                 
                 if event.key == pygame.K_r and game_won:
                     init_game_state()
             
-            # ========== UNLOCK AUDIO DENGAN MOUSE CLICK ==========
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                if not audio_unlocked and MIXER_AVAILABLE and len(jumpscare_sounds) > 0:
-                    try:
-                        test_sound = jumpscare_sounds[0]
-                        test_sound.set_volume(0.0)
-                        test_sound.play()
-                        test_sound.stop()
-                        test_sound.set_volume(1.0)
-                        audio_unlocked = True
-                        print("🔊 Audio unlocked by mouse click!")
-                    except Exception as e:
-                        print(f"⚠️ Audio unlock failed: {e}")
+                # Unlock audio on first click
+                if not audio_unlocked:
+                    unlock_audio()
         
         # ============ MOVEMENT ============
         if not jumpscare_active and not game_won:
@@ -306,10 +325,13 @@ async def main():
                     
                     # Play sound HANYA jika audio sudah unlocked
                     if audio_unlocked and MIXER_AVAILABLE and len(jumpscare_sounds) > 0:
-                        current_jumpscare_sound = random.choice(jumpscare_sounds)
-                        current_jumpscare_sound.set_volume(0.8)
-                        current_jumpscare_sound.play()
-                        print("🔊 Playing jumpscare sound!")
+                        try:
+                            current_jumpscare_sound = random.choice(jumpscare_sounds)
+                            current_jumpscare_sound.set_volume(0.8)
+                            current_jumpscare_sound.play()
+                            print("🔊 Playing jumpscare sound!")
+                        except Exception as e:
+                            print(f"⚠️ Sound play failed: {e}")
                     elif not audio_unlocked:
                         print("⚠️ Audio not unlocked - click screen first!")
         
