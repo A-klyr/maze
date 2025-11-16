@@ -66,7 +66,7 @@ jumpscare_active = False
 jumpscare_start_time = 0
 current_jumpscare_img = None
 current_jumpscare_sound = None
-audio_unlocked = False  # Flag untuk audio unlock
+audio_unlocked = False
 
 # ==== ASYNC ASSET LOADING (PENTING UNTUK PYGBAG) ====
 async def load_assets():
@@ -75,23 +75,22 @@ async def load_assets():
     
     print("🔄 Loading assets...")
     
-    # List file yang akan dimuat
+    # PENTING: File harus ada di ROOT FOLDER untuk Pygbag
     image_files = [
-        'assets/images/kucing1.jpeg',
-        'assets/images/kucing2.jpeg',
-        'assets/images/kucing3.jpeg'
+        'kucing1.jpeg',
+        'kucing2.jpeg',
+        'kucing3.jpeg'
     ]
     
     sound_files = [
-        'assets/sounds/fuzzy-jumpscare-80560.wav',
-        'assets/sounds/jump-scare-sound-2-82831.wav',
-        'assets/sounds/five-nights-at-freddys-full-scream-sound_2.wav'
+        'fuzzy-jumpscare-80560.wav',
+        'jump-scare-sound-2-82831.wav',
+        'five-nights-at-freddys-full-scream-sound_2.wav'
     ]
     
     try:
         # Load images
         for img_path in image_files:
-            # Pygbag butuh sedikit delay untuk load assets
             if IS_WEB:
                 await asyncio.sleep(0.1)
             
@@ -99,21 +98,18 @@ async def load_assets():
                 img = pygame.image.load(img_path)
                 img = pygame.transform.scale(img, (SCREEN_WIDTH, MAZE_HEIGHT * CELL_SIZE))
                 jumpscare_images.append(img)
-                print(f"✅ Loaded: {img_path}")
+                print(f"✅ Loaded image: {img_path}")
             except Exception as e:
                 print(f"❌ Failed to load {img_path}: {e}")
         
-        # Load sounds
-        if MIXER_AVAILABLE:
+        # Load sounds (hanya untuk desktop, web akan pakai JS Audio)
+        if MIXER_AVAILABLE and not IS_WEB:
             for sound_path in sound_files:
-                if IS_WEB:
-                    await asyncio.sleep(0.1)
-                
                 try:
                     snd = pygame.mixer.Sound(sound_path)
-                    snd.set_volume(1.0)  # Set volume maksimal saat load
+                    snd.set_volume(1.0)
                     jumpscare_sounds.append(snd)
-                    print(f"✅ Loaded: {sound_path}")
+                    print(f"✅ Loaded sound: {sound_path}")
                 except Exception as e:
                     print(f"❌ Failed to load {sound_path}: {e}")
         
@@ -150,45 +146,44 @@ async def unlock_audio():
                 
                 print("   - Creating AudioContext...")
                 
-                # Create or resume audio context
-                if hasattr(window, 'webkitAudioContext'):
-                    print("   - Using webkitAudioContext")
-                else:
-                    print("   - Using standard AudioContext")
-                
-                # Load sounds menggunakan HTML5 Audio
+                # Load sounds menggunakan HTML5 Audio dari ROOT FOLDER
                 sound_files = [
-                    'assets/sounds/fuzzy-jumpscare-80560.wav',
-                    'assets/sounds/jump-scare-sound-2-82831.wav',
-                    'assets/sounds/five-nights-at-freddys-full-scream-sound_2.wav'
+                    'fuzzy-jumpscare-80560.wav',
+                    'jump-scare-sound-2-82831.wav',
+                    'five-nights-at-freddys-full-scream-sound_2.wav'
                 ]
                 
                 jumpscare_sounds.clear()
                 
                 for sound_path in sound_files:
                     try:
-                        # Create HTML5 Audio element
+                        print(f"   - Loading: {sound_path}")
                         audio = Audio.new(sound_path)
                         audio.volume = 1.0
                         audio.preload = "auto"
+                        
+                        # Wait for audio to be ready
+                        await asyncio.sleep(0.15)
+                        
                         jumpscare_sounds.append(audio)
                         print(f"   ✅ Loaded with JS Audio: {sound_path}")
-                        await asyncio.sleep(0.1)
                     except Exception as e:
                         print(f"   ❌ Failed to load {sound_path}: {e}")
                 
-                # Play test sound
+                # Play test sound untuk unlock audio context
                 if len(jumpscare_sounds) > 0:
                     print("   🔊 Playing JS test sound...")
                     test_audio = jumpscare_sounds[0]
                     test_audio.volume = 0.1
                     
-                    # Play using JavaScript
-                    promise = test_audio.play()
-                    await asyncio.sleep(0.2)
-                    test_audio.pause()
-                    test_audio.currentTime = 0
-                    print("   ✅ JS test sound played!")
+                    try:
+                        promise = test_audio.play()
+                        await asyncio.sleep(0.2)
+                        test_audio.pause()
+                        test_audio.currentTime = 0
+                        print("   ✅ JS test sound played!")
+                    except Exception as e:
+                        print(f"   ⚠️ Test sound failed: {e}")
                 
                 audio_unlocked = True
                 print(f"🎉 Audio unlocked via JavaScript! Loaded {len(jumpscare_sounds)} sounds")
@@ -211,9 +206,9 @@ async def unlock_audio():
         await asyncio.sleep(0.2)
         
         sound_files = [
-            'assets/sounds/fuzzy-jumpscare-80560.wav',
-            'assets/sounds/jump-scare-sound-2-82831.wav',
-            'assets/sounds/five-nights-at-freddys-full-scream-sound_2.wav'
+            'fuzzy-jumpscare-80560.wav',
+            'jump-scare-sound-2-82831.wav',
+            'five-nights-at-freddys-full-scream-sound_2.wav'
         ]
         
         jumpscare_sounds.clear()
@@ -258,7 +253,7 @@ def load_best_times():
             pass
     else:
         try:
-            with open('assets/data/best_times.txt', 'r') as f:
+            with open('best_times.txt', 'r') as f:
                 best_times = [float(x.strip()) for x in f.readlines()]
         except:
             pass
@@ -276,7 +271,7 @@ def save_best_times():
             pass
     else:
         try:
-            with open('assets/data/best_times.txt', 'w') as f:
+            with open('best_times.txt', 'w') as f:
                 f.write("\n".join([str(x) for x in best_times]))
         except:
             pass
@@ -355,7 +350,7 @@ async def main():
                 # Unlock audio on first keypress
                 if not audio_unlocked:
                     print("🔄 Attempting to unlock audio via keyboard...")
-                    await unlock_audio()  # AWAIT untuk async function
+                    await unlock_audio()
                     
                     # Force play after unlock
                     if audio_unlocked and len(jumpscare_sounds) > 0:
@@ -387,7 +382,7 @@ async def main():
                 # Unlock audio on first click
                 if not audio_unlocked:
                     print("🔄 Attempting to unlock audio via mouse...")
-                    await unlock_audio()  # AWAIT untuk async function
+                    await unlock_audio()
                     
                     # TEST: Force play sound setelah unlock
                     if audio_unlocked and len(jumpscare_sounds) > 0:
@@ -397,13 +392,11 @@ async def main():
                             
                             # Check if JS Audio or Pygame
                             if IS_WEB and hasattr(test, 'play'):
-                                # JavaScript Audio
                                 test.volume = 0.5
                                 test.currentTime = 0
                                 promise = test.play()
                                 print("✅ JS Audio test playing!")
                             else:
-                                # Pygame Sound
                                 pygame.mixer.unpause()
                                 test.set_volume(0.5)
                                 channel = test.play()
