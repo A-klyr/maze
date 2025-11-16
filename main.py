@@ -111,6 +111,7 @@ async def load_assets():
                 
                 try:
                     snd = pygame.mixer.Sound(sound_path)
+                    snd.set_volume(1.0)  # Set volume maksimal saat load
                     jumpscare_sounds.append(snd)
                     print(f"✅ Loaded: {sound_path}")
                 except Exception as e:
@@ -126,9 +127,9 @@ async def load_assets():
         print(f"⚠️ Asset loading error: {e}")
         assets_loaded = False
 
-# ==== UNLOCK AUDIO FUNCTION ====
-def unlock_audio():
-    """Unlock audio dengan reinit mixer"""
+# ==== UNLOCK AUDIO FUNCTION (ASYNC) ====
+async def unlock_audio():
+    """Unlock audio dengan reinit mixer (ASYNC untuk Pygbag)"""
     global audio_unlocked, jumpscare_sounds
     
     print("🚀 unlock_audio() called!")
@@ -150,10 +151,17 @@ def unlock_audio():
         pygame.mixer.quit()
         print("   - Mixer quit")
         
-        pygame.mixer.init()
-        print("   - Mixer init")
+        if IS_WEB:
+            await asyncio.sleep(0.1)  # Give time for cleanup
         
-        # Reload sounds
+        # Init dengan config optimal untuk web
+        pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+        print("   - Mixer init with web-optimized settings")
+        
+        if IS_WEB:
+            await asyncio.sleep(0.1)
+        
+        # Reload sounds DENGAN DELAY untuk Pygbag
         old_count = len(jumpscare_sounds)
         jumpscare_sounds.clear()
         print(f"   - Cleared {old_count} old sounds")
@@ -165,12 +173,28 @@ def unlock_audio():
         ]
         
         for sound_path in sound_files:
+            if IS_WEB:
+                await asyncio.sleep(0.1)  # CRITICAL untuk Pygbag
             try:
                 snd = pygame.mixer.Sound(sound_path)
+                snd.set_volume(1.0)  # MAX VOLUME
                 jumpscare_sounds.append(snd)
                 print(f"   ✅ Reloaded: {sound_path}")
             except Exception as e:
                 print(f"   ❌ Failed to reload {sound_path}: {e}")
+        
+        # PLAY TEST SOUND untuk benar-benar unlock audio context
+        if len(jumpscare_sounds) > 0:
+            print("   🔊 Playing test sound to unlock audio context...")
+            test_sound = jumpscare_sounds[0]
+            test_sound.set_volume(0.01)  # Very quiet test
+            test_sound.play()
+            
+            if IS_WEB:
+                await asyncio.sleep(0.05)
+            
+            test_sound.stop()
+            print("   ✅ Test sound played")
         
         audio_unlocked = True
         print(f"🎉 Audio unlocked! Loaded {len(jumpscare_sounds)} sounds")
@@ -291,7 +315,7 @@ async def main():
                 # Unlock audio on first keypress
                 if not audio_unlocked:
                     print("🔄 Attempting to unlock audio via keyboard...")
-                    unlock_audio()
+                    await unlock_audio()  # AWAIT untuk async function
                 else:
                     print("✅ Audio already unlocked")
                 
@@ -303,7 +327,7 @@ async def main():
                 # Unlock audio on first click
                 if not audio_unlocked:
                     print("🔄 Attempting to unlock audio via mouse...")
-                    unlock_audio()
+                    await unlock_audio()  # AWAIT untuk async function
                 else:
                     print("✅ Audio already unlocked")
         
@@ -353,13 +377,15 @@ async def main():
                     if audio_unlocked and MIXER_AVAILABLE and len(jumpscare_sounds) > 0:
                         try:
                             current_jumpscare_sound = random.choice(jumpscare_sounds)
-                            current_jumpscare_sound.set_volume(0.8)
+                            current_jumpscare_sound.set_volume(1.0)  # MAX VOLUME
                             current_jumpscare_sound.play()
                             print("🔊 Playing jumpscare sound!")
                         except Exception as e:
                             print(f"⚠️ Sound play failed: {e}")
                     elif not audio_unlocked:
                         print("⚠️ Audio not unlocked - click screen first!")
+                    else:
+                        print(f"⚠️ Cannot play: mixer={MIXER_AVAILABLE}, sounds={len(jumpscare_sounds)}")
         
         # Handle jumpscare duration
         if jumpscare_active and current_time - jumpscare_start_time > 1500:
