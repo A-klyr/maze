@@ -129,50 +129,86 @@ async def load_assets():
 
 # ==== UNLOCK AUDIO FUNCTION (ASYNC) ====
 async def unlock_audio():
-    """Unlock audio dengan reinit mixer (ASYNC untuk Pygbag)"""
+    """Unlock audio dengan JavaScript Web Audio API"""
     global audio_unlocked, jumpscare_sounds
     
     print("🚀 unlock_audio() called!")
-    print(f"   MIXER_AVAILABLE: {MIXER_AVAILABLE}")
-    print(f"   audio_unlocked: {audio_unlocked}")
-    
-    if not MIXER_AVAILABLE:
-        print("❌ Mixer not available!")
-        return
     
     if audio_unlocked:
         print("⚠️ Audio already unlocked!")
         return
     
     try:
-        print("🔄 Reinitializing audio...")
-        
-        # FORCE: Set pre-init untuk bypass browser restrictions
         if IS_WEB:
-            pygame.mixer.pre_init(22050, -16, 2, 512)
+            print("🔄 Using JavaScript Web Audio API...")
+            
+            # Import JS modules
+            import platform
+            if platform.system() == "Emscripten":
+                import js
+                from js import window, Audio
+                
+                print("   - Creating AudioContext...")
+                
+                # Create or resume audio context
+                if hasattr(window, 'webkitAudioContext'):
+                    print("   - Using webkitAudioContext")
+                else:
+                    print("   - Using standard AudioContext")
+                
+                # Load sounds menggunakan HTML5 Audio
+                sound_files = [
+                    'assets/sounds/fuzzy-jumpscare-80560.wav',
+                    'assets/sounds/jump-scare-sound-2-82831.wav',
+                    'assets/sounds/five-nights-at-freddys-full-scream-sound_2.wav'
+                ]
+                
+                jumpscare_sounds.clear()
+                
+                for sound_path in sound_files:
+                    try:
+                        # Create HTML5 Audio element
+                        audio = Audio.new(sound_path)
+                        audio.volume = 1.0
+                        audio.preload = "auto"
+                        jumpscare_sounds.append(audio)
+                        print(f"   ✅ Loaded with JS Audio: {sound_path}")
+                        await asyncio.sleep(0.1)
+                    except Exception as e:
+                        print(f"   ❌ Failed to load {sound_path}: {e}")
+                
+                # Play test sound
+                if len(jumpscare_sounds) > 0:
+                    print("   🔊 Playing JS test sound...")
+                    test_audio = jumpscare_sounds[0]
+                    test_audio.volume = 0.1
+                    
+                    # Play using JavaScript
+                    promise = test_audio.play()
+                    await asyncio.sleep(0.2)
+                    test_audio.pause()
+                    test_audio.currentTime = 0
+                    print("   ✅ JS test sound played!")
+                
+                audio_unlocked = True
+                print(f"🎉 Audio unlocked via JavaScript! Loaded {len(jumpscare_sounds)} sounds")
+                return
         
-        # Reinit mixer untuk unlock browser audio context
+        # Fallback ke Pygame mixer untuk desktop
+        print("🔄 Using Pygame mixer (desktop mode)...")
+        
+        if not MIXER_AVAILABLE:
+            print("❌ Mixer not available!")
+            return
+        
         pygame.mixer.quit()
-        print("   - Mixer quit")
+        await asyncio.sleep(0.2)
         
-        if IS_WEB:
-            await asyncio.sleep(0.2)  # Longer delay untuk Pygbag
-        
-        # Init dengan config optimal untuk web
+        pygame.mixer.pre_init(22050, -16, 2, 512)
         pygame.mixer.init(22050, -16, 2, 512)
-        print("   - Mixer init with web-optimized settings")
-        
-        if IS_WEB:
-            await asyncio.sleep(0.2)
-        
-        # Set channels untuk ensure ada channel available
         pygame.mixer.set_num_channels(8)
-        print(f"   - Set {pygame.mixer.get_num_channels()} audio channels")
         
-        # Reload sounds DENGAN DELAY untuk Pygbag
-        old_count = len(jumpscare_sounds)
-        jumpscare_sounds.clear()
-        print(f"   - Cleared {old_count} old sounds")
+        await asyncio.sleep(0.2)
         
         sound_files = [
             'assets/sounds/fuzzy-jumpscare-80560.wav',
@@ -180,35 +216,28 @@ async def unlock_audio():
             'assets/sounds/five-nights-at-freddys-full-scream-sound_2.wav'
         ]
         
+        jumpscare_sounds.clear()
+        
         for sound_path in sound_files:
-            if IS_WEB:
-                await asyncio.sleep(0.15)  # Longer delay
+            await asyncio.sleep(0.15)
             try:
                 snd = pygame.mixer.Sound(sound_path)
-                snd.set_volume(1.0)  # MAX VOLUME
+                snd.set_volume(1.0)
                 jumpscare_sounds.append(snd)
-                print(f"   ✅ Reloaded: {sound_path}")
+                print(f"   ✅ Loaded with Pygame: {sound_path}")
             except Exception as e:
-                print(f"   ❌ Failed to reload {sound_path}: {e}")
+                print(f"   ❌ Failed to load {sound_path}: {e}")
         
-        # CRITICAL: Play test sound MULTIPLE TIMES untuk force unlock
         if len(jumpscare_sounds) > 0:
-            print("   🔊 Playing test sounds to unlock audio context...")
-            
-            for i in range(3):  # Try 3 times
-                test_sound = jumpscare_sounds[0]
-                test_sound.set_volume(0.01)
-                test_sound.play()
-                
-                if IS_WEB:
-                    await asyncio.sleep(0.1)
-                
-                test_sound.stop()
-                print(f"   ✅ Test sound {i+1}/3 played")
+            test_sound = jumpscare_sounds[0]
+            test_sound.set_volume(0.1)
+            test_sound.play()
+            await asyncio.sleep(0.1)
+            test_sound.stop()
+            print("   ✅ Pygame test sound played")
         
         audio_unlocked = True
-        print(f"🎉 Audio unlocked! Loaded {len(jumpscare_sounds)} sounds")
-        print(f"   Available channels: {pygame.mixer.get_num_channels()}")
+        print(f"🎉 Audio unlocked via Pygame! Loaded {len(jumpscare_sounds)} sounds")
         
     except Exception as e:
         print(f"💥 Audio unlock FAILED: {e}")
@@ -332,11 +361,19 @@ async def main():
                     if audio_unlocked and len(jumpscare_sounds) > 0:
                         print("🔊 Force playing sound after keyboard unlock...")
                         try:
-                            pygame.mixer.unpause()  # Resume if paused
                             test = jumpscare_sounds[0]
-                            test.set_volume(0.5)
-                            test.play()
-                            print("✅ Keyboard test sound played!")
+                            
+                            # Check if JS Audio or Pygame
+                            if IS_WEB and hasattr(test, 'play'):
+                                test.volume = 0.5
+                                test.currentTime = 0
+                                promise = test.play()
+                                print("✅ JS keyboard test playing!")
+                            else:
+                                pygame.mixer.unpause()
+                                test.set_volume(0.5)
+                                channel = test.play()
+                                print(f"✅ Pygame keyboard test: {channel}!")
                         except Exception as e:
                             print(f"❌ Keyboard test failed: {e}")
                 else:
@@ -354,16 +391,26 @@ async def main():
                     
                     # TEST: Force play sound setelah unlock
                     if audio_unlocked and len(jumpscare_sounds) > 0:
-                        print("🔊 Testing sound after unlock...")
+                        print("🔊 Testing sound after mouse unlock...")
                         try:
-                            pygame.mixer.unpause()  # Resume if paused
                             test = jumpscare_sounds[0]
-                            test.set_volume(0.5)
-                            channel = test.play()
-                            if channel:
-                                print(f"✅ Manual test sound playing on channel {channel}!")
+                            
+                            # Check if JS Audio or Pygame
+                            if IS_WEB and hasattr(test, 'play'):
+                                # JavaScript Audio
+                                test.volume = 0.5
+                                test.currentTime = 0
+                                promise = test.play()
+                                print("✅ JS Audio test playing!")
                             else:
-                                print("❌ No channel for manual test!")
+                                # Pygame Sound
+                                pygame.mixer.unpause()
+                                test.set_volume(0.5)
+                                channel = test.play()
+                                if channel:
+                                    print(f"✅ Pygame test on channel {channel}!")
+                                else:
+                                    print("❌ No channel for test!")
                         except Exception as e:
                             print(f"❌ Manual test failed: {e}")
                 else:
@@ -412,28 +459,32 @@ async def main():
                     print(f"👻 JUMPSCARE at ({player_x}, {player_y})!")
                     
                     # Play sound HANYA jika audio sudah unlocked
-                    if audio_unlocked and MIXER_AVAILABLE and len(jumpscare_sounds) > 0:
+                    if audio_unlocked and len(jumpscare_sounds) > 0:
                         try:
-                            # FORCE UNPAUSE sebelum play
-                            pygame.mixer.unpause()
-                            
                             current_jumpscare_sound = random.choice(jumpscare_sounds)
-                            print(f"🔊 Attempting to play jumpscare sound")
-                            print(f"   - Mixer channels: {pygame.mixer.get_num_channels()}")
-                            print(f"   - Mixer busy: {pygame.mixer.get_busy()}")
+                            print(f"🔊 Playing jumpscare sound...")
                             
-                            current_jumpscare_sound.set_volume(1.0)  # MAX VOLUME
-                            channel = current_jumpscare_sound.play()
-                            
-                            if channel:
-                                print(f"✅ Jumpscare sound playing on channel: {channel}")
+                            # Check if this is JS Audio or Pygame Sound
+                            if IS_WEB and hasattr(current_jumpscare_sound, 'play'):
+                                # JavaScript Audio element
+                                current_jumpscare_sound.volume = 1.0
+                                current_jumpscare_sound.currentTime = 0
+                                promise = current_jumpscare_sound.play()
+                                print("✅ JS Audio jumpscare playing!")
                             else:
-                                print("❌ No channel available for jumpscare!")
-                                # Try force stop all and replay
-                                pygame.mixer.stop()
-                                await asyncio.sleep(0.05)
+                                # Pygame Sound
+                                pygame.mixer.unpause()
+                                current_jumpscare_sound.set_volume(1.0)
                                 channel = current_jumpscare_sound.play()
-                                print(f"🔄 Retry result: {channel}")
+                                
+                                if channel:
+                                    print(f"✅ Pygame jumpscare on channel: {channel}")
+                                else:
+                                    print("❌ No channel available!")
+                                    pygame.mixer.stop()
+                                    await asyncio.sleep(0.05)
+                                    channel = current_jumpscare_sound.play()
+                                    print(f"🔄 Retry: {channel}")
                                 
                         except Exception as e:
                             print(f"⚠️ Sound play failed: {e}")
@@ -442,7 +493,7 @@ async def main():
                     elif not audio_unlocked:
                         print("⚠️ Audio not unlocked - click screen first!")
                     else:
-                        print(f"⚠️ Cannot play: mixer={MIXER_AVAILABLE}, sounds={len(jumpscare_sounds)}")
+                        print(f"⚠️ Cannot play: sounds={len(jumpscare_sounds)}")
         
         # Handle jumpscare duration
         if jumpscare_active and current_time - jumpscare_start_time > 1500:
