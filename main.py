@@ -147,19 +147,27 @@ async def unlock_audio():
     try:
         print("🔄 Reinitializing audio...")
         
+        # FORCE: Set pre-init untuk bypass browser restrictions
+        if IS_WEB:
+            pygame.mixer.pre_init(22050, -16, 2, 512)
+        
         # Reinit mixer untuk unlock browser audio context
         pygame.mixer.quit()
         print("   - Mixer quit")
         
         if IS_WEB:
-            await asyncio.sleep(0.1)  # Give time for cleanup
+            await asyncio.sleep(0.2)  # Longer delay untuk Pygbag
         
         # Init dengan config optimal untuk web
-        pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+        pygame.mixer.init(22050, -16, 2, 512)
         print("   - Mixer init with web-optimized settings")
         
         if IS_WEB:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.2)
+        
+        # Set channels untuk ensure ada channel available
+        pygame.mixer.set_num_channels(8)
+        print(f"   - Set {pygame.mixer.get_num_channels()} audio channels")
         
         # Reload sounds DENGAN DELAY untuk Pygbag
         old_count = len(jumpscare_sounds)
@@ -174,7 +182,7 @@ async def unlock_audio():
         
         for sound_path in sound_files:
             if IS_WEB:
-                await asyncio.sleep(0.1)  # CRITICAL untuk Pygbag
+                await asyncio.sleep(0.15)  # Longer delay
             try:
                 snd = pygame.mixer.Sound(sound_path)
                 snd.set_volume(1.0)  # MAX VOLUME
@@ -183,21 +191,24 @@ async def unlock_audio():
             except Exception as e:
                 print(f"   ❌ Failed to reload {sound_path}: {e}")
         
-        # PLAY TEST SOUND untuk benar-benar unlock audio context
+        # CRITICAL: Play test sound MULTIPLE TIMES untuk force unlock
         if len(jumpscare_sounds) > 0:
-            print("   🔊 Playing test sound to unlock audio context...")
-            test_sound = jumpscare_sounds[0]
-            test_sound.set_volume(0.01)  # Very quiet test
-            test_sound.play()
+            print("   🔊 Playing test sounds to unlock audio context...")
             
-            if IS_WEB:
-                await asyncio.sleep(0.05)
-            
-            test_sound.stop()
-            print("   ✅ Test sound played")
+            for i in range(3):  # Try 3 times
+                test_sound = jumpscare_sounds[0]
+                test_sound.set_volume(0.01)
+                test_sound.play()
+                
+                if IS_WEB:
+                    await asyncio.sleep(0.1)
+                
+                test_sound.stop()
+                print(f"   ✅ Test sound {i+1}/3 played")
         
         audio_unlocked = True
         print(f"🎉 Audio unlocked! Loaded {len(jumpscare_sounds)} sounds")
+        print(f"   Available channels: {pygame.mixer.get_num_channels()}")
         
     except Exception as e:
         print(f"💥 Audio unlock FAILED: {e}")
@@ -316,6 +327,18 @@ async def main():
                 if not audio_unlocked:
                     print("🔄 Attempting to unlock audio via keyboard...")
                     await unlock_audio()  # AWAIT untuk async function
+                    
+                    # Force play after unlock
+                    if audio_unlocked and len(jumpscare_sounds) > 0:
+                        print("🔊 Force playing sound after keyboard unlock...")
+                        try:
+                            pygame.mixer.unpause()  # Resume if paused
+                            test = jumpscare_sounds[0]
+                            test.set_volume(0.5)
+                            test.play()
+                            print("✅ Keyboard test sound played!")
+                        except Exception as e:
+                            print(f"❌ Keyboard test failed: {e}")
                 else:
                     print("✅ Audio already unlocked")
                 
@@ -328,6 +351,21 @@ async def main():
                 if not audio_unlocked:
                     print("🔄 Attempting to unlock audio via mouse...")
                     await unlock_audio()  # AWAIT untuk async function
+                    
+                    # TEST: Force play sound setelah unlock
+                    if audio_unlocked and len(jumpscare_sounds) > 0:
+                        print("🔊 Testing sound after unlock...")
+                        try:
+                            pygame.mixer.unpause()  # Resume if paused
+                            test = jumpscare_sounds[0]
+                            test.set_volume(0.5)
+                            channel = test.play()
+                            if channel:
+                                print(f"✅ Manual test sound playing on channel {channel}!")
+                            else:
+                                print("❌ No channel for manual test!")
+                        except Exception as e:
+                            print(f"❌ Manual test failed: {e}")
                 else:
                     print("✅ Audio already unlocked")
         
@@ -376,12 +414,31 @@ async def main():
                     # Play sound HANYA jika audio sudah unlocked
                     if audio_unlocked and MIXER_AVAILABLE and len(jumpscare_sounds) > 0:
                         try:
+                            # FORCE UNPAUSE sebelum play
+                            pygame.mixer.unpause()
+                            
                             current_jumpscare_sound = random.choice(jumpscare_sounds)
+                            print(f"🔊 Attempting to play jumpscare sound")
+                            print(f"   - Mixer channels: {pygame.mixer.get_num_channels()}")
+                            print(f"   - Mixer busy: {pygame.mixer.get_busy()}")
+                            
                             current_jumpscare_sound.set_volume(1.0)  # MAX VOLUME
-                            current_jumpscare_sound.play()
-                            print("🔊 Playing jumpscare sound!")
+                            channel = current_jumpscare_sound.play()
+                            
+                            if channel:
+                                print(f"✅ Jumpscare sound playing on channel: {channel}")
+                            else:
+                                print("❌ No channel available for jumpscare!")
+                                # Try force stop all and replay
+                                pygame.mixer.stop()
+                                await asyncio.sleep(0.05)
+                                channel = current_jumpscare_sound.play()
+                                print(f"🔄 Retry result: {channel}")
+                                
                         except Exception as e:
                             print(f"⚠️ Sound play failed: {e}")
+                            import traceback
+                            traceback.print_exc()
                     elif not audio_unlocked:
                         print("⚠️ Audio not unlocked - click screen first!")
                     else:
@@ -425,11 +482,17 @@ async def main():
                 best_text = font_small.render(f"Best: {best_times[0]:.2f}s", True, YELLOW)
                 screen.blit(best_text, (SCREEN_WIDTH - 150, ui_y + 10))
             
-            # Audio warning indicator (blink)
+            # Audio warning indicator (blink) - LEBIH BESAR
             if not audio_unlocked and MIXER_AVAILABLE:
                 if (current_time // 500) % 2 == 0:  # Blink every 500ms
-                    audio_warn = font_small.render("Click or Press key to enable sound", True, YELLOW)
-                    audio_rect = audio_warn.get_rect(center=(SCREEN_WIDTH // 2, ui_y + 70))
+                    # Background merah untuk lebih kelihatan
+                    warn_bg = pygame.Surface((SCREEN_WIDTH - 20, 80))
+                    warn_bg.fill(RED)
+                    warn_bg.set_alpha(150)
+                    screen.blit(warn_bg, (10, ui_y + 35))
+                    
+                    audio_warn = font_large.render("CLICK SCREEN TO ENABLE SOUND!", True, WHITE)
+                    audio_rect = audio_warn.get_rect(center=(SCREEN_WIDTH // 2, ui_y + 75))
                     screen.blit(audio_warn, audio_rect)
             
             # Check win
