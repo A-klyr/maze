@@ -48,6 +48,7 @@ font_huge = pygame.font.SysFont(None, 72)
 assets_loaded = False
 jumpscare_images = []
 jumpscare_sounds = []
+audio_context = None  # Store audio context reference
 
 # ==== GAME STATE VARIABLES ====
 MAZE_MAP = None
@@ -126,7 +127,7 @@ async def load_assets():
 # ==== UNLOCK AUDIO FUNCTION (ASYNC) ====
 async def unlock_audio():
     """Unlock audio dengan JavaScript Web Audio API"""
-    global audio_unlocked, jumpscare_sounds
+    global audio_unlocked, jumpscare_sounds, audio_context
     
     print("🚀 unlock_audio() called!")
     
@@ -142,9 +143,24 @@ async def unlock_audio():
             import platform
             if platform.system() == "Emscripten":
                 import js
-                from js import window, Audio
+                from js import window, Audio, AudioContext
                 
-                print("   - Creating AudioContext...")
+                # Create AudioContext and store reference
+                try:
+                    if hasattr(window, 'AudioContext'):
+                        audio_context = AudioContext.new()
+                    elif hasattr(window, 'webkitAudioContext'):
+                        audio_context = window.webkitAudioContext.new()
+                    
+                    if audio_context:
+                        print(f"   - AudioContext created: {audio_context.state}")
+                        # Force resume
+                        if audio_context.state == "suspended":
+                            audio_context.resume()
+                            await asyncio.sleep(0.1)
+                            print(f"   - AudioContext resumed: {audio_context.state}")
+                except Exception as e:
+                    print(f"   ⚠️ AudioContext creation failed: {e}")
                 
                 # Load sounds menggunakan HTML5 Audio dari ROOT FOLDER
                 sound_files = [
@@ -161,9 +177,10 @@ async def unlock_audio():
                         audio = Audio.new(sound_path)
                         audio.volume = 1.0
                         audio.preload = "auto"
+                        audio.load()  # Force load
                         
                         # Wait for audio to be ready
-                        await asyncio.sleep(0.15)
+                        await asyncio.sleep(0.2)
                         
                         jumpscare_sounds.append(audio)
                         print(f"   ✅ Loaded with JS Audio: {sound_path}")
@@ -171,17 +188,23 @@ async def unlock_audio():
                         print(f"   ❌ Failed to load {sound_path}: {e}")
                 
                 # Play test sound untuk unlock audio context
-                if len(jumpscare_sounds) > 0:
+                if len(jumpscare_sounds) > 0 and audio_context:
                     print("   🔊 Playing JS test sound...")
+                    
+                    # Resume context before play
+                    if audio_context.state == "suspended":
+                        audio_context.resume()
+                        await asyncio.sleep(0.1)
+                    
                     test_audio = jumpscare_sounds[0]
                     test_audio.volume = 0.1
                     
                     try:
                         promise = test_audio.play()
-                        await asyncio.sleep(0.2)
+                        await asyncio.sleep(0.3)
                         test_audio.pause()
                         test_audio.currentTime = 0
-                        print("   ✅ JS test sound played!")
+                        print(f"   ✅ JS test sound played! Context: {audio_context.state}")
                     except Exception as e:
                         print(f"   ⚠️ Test sound failed: {e}")
                 
@@ -335,10 +358,22 @@ async def main():
     
     clock = pygame.time.Clock()
     running = True
+    frame_count = 0
     
     while running:
         clock.tick(60)
         current_time = pygame.time.get_ticks()
+        frame_count += 1
+        
+        # Resume audio context every 60 frames (1 second) jika suspended
+        if IS_WEB and audio_unlocked and audio_context and frame_count % 60 == 0:
+            try:
+                import js
+                if audio_context.state == "suspended":
+                    print(f"⚠️ AudioContext suspended! Resuming...")
+                    audio_context.resume()
+            except:
+                pass
         
         # Handle events
         for event in pygame.event.get():
@@ -459,11 +494,21 @@ async def main():
                             
                             # Check if this is JS Audio or Pygame Sound
                             if IS_WEB and hasattr(current_jumpscare_sound, 'play'):
+                                # CRITICAL: Resume audio context before play
+                                if audio_context:
+                                    try:
+                                        if audio_context.state == "suspended":
+                                            print("   - Resuming suspended AudioContext...")
+                                            audio_context.resume()
+                                            await asyncio.sleep(0.05)
+                                    except:
+                                        pass
+                                
                                 # JavaScript Audio element
                                 current_jumpscare_sound.volume = 1.0
                                 current_jumpscare_sound.currentTime = 0
                                 promise = current_jumpscare_sound.play()
-                                print("✅ JS Audio jumpscare playing!")
+                                print(f"✅ JS Audio jumpscare playing! Context: {audio_context.state if audio_context else 'N/A'}")
                             else:
                                 # Pygame Sound
                                 pygame.mixer.unpause()
