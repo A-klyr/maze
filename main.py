@@ -103,8 +103,8 @@ async def load_assets():
             except Exception as e:
                 print(f"❌ Failed to load {img_path}: {e}")
         
-        # Load sounds (hanya untuk desktop, web akan pakai JS Audio)
-        if MIXER_AVAILABLE and not IS_WEB:
+        # Load sounds (untuk desktop dan web via Pygame mixer)
+        if MIXER_AVAILABLE:
             for sound_path in sound_files:
                 try:
                     snd = pygame.mixer.Sound(sound_path)
@@ -126,8 +126,8 @@ async def load_assets():
 
 # ==== UNLOCK AUDIO FUNCTION (ASYNC) ====
 async def unlock_audio():
-    """Unlock audio dengan JavaScript Web Audio API"""
-    global audio_unlocked, jumpscare_sounds, audio_context
+    """Unlock audio context (required for Web)"""
+    global audio_unlocked, jumpscare_sounds
     
     print("🚀 unlock_audio() called!")
     
@@ -136,126 +136,47 @@ async def unlock_audio():
         return
     
     try:
-        if IS_WEB:
-            print("🔄 Using JavaScript Web Audio API...")
-            
-            # Import JS modules
-            import platform
-            if platform.system() == "Emscripten":
-                import js
-                from js import window, Audio, AudioContext
-                
-                # Create AudioContext and store reference
-                try:
-                    if hasattr(window, 'AudioContext'):
-                        audio_context = AudioContext.new()
-                    elif hasattr(window, 'webkitAudioContext'):
-                        audio_context = window.webkitAudioContext.new()
-                    
-                    if audio_context:
-                        print(f"   - AudioContext created: {audio_context.state}")
-                        # Force resume
-                        if audio_context.state == "suspended":
-                            audio_context.resume()
-                            await asyncio.sleep(0.1)
-                            print(f"   - AudioContext resumed: {audio_context.state}")
-                except Exception as e:
-                    print(f"   ⚠️ AudioContext creation failed: {e}")
-                
-                # Load sounds menggunakan HTML5 Audio dari ROOT FOLDER
-                sound_files = [
-                    'fuzzy-jumpscare-80560.wav',
-                    'jump-scare-sound-2-82831.wav',
-                    'five-nights-at-freddys-full-scream-sound_2.wav'
-                ]
-                
-                jumpscare_sounds.clear()
-                
-                for sound_path in sound_files:
-                    try:
-                        print(f"   - Loading: {sound_path}")
-                        audio = Audio.new(sound_path)
-                        audio.volume = 1.0
-                        audio.preload = "auto"
-                        audio.load()  # Force load
-                        
-                        # Wait for audio to be ready
-                        await asyncio.sleep(0.2)
-                        
-                        jumpscare_sounds.append(audio)
-                        print(f"   ✅ Loaded with JS Audio: {sound_path}")
-                    except Exception as e:
-                        print(f"   ❌ Failed to load {sound_path}: {e}")
-                
-                # Play test sound untuk unlock audio context
-                if len(jumpscare_sounds) > 0 and audio_context:
-                    print("   🔊 Playing JS test sound...")
-                    
-                    # Resume context before play
-                    if audio_context.state == "suspended":
-                        audio_context.resume()
-                        await asyncio.sleep(0.1)
-                    
-                    test_audio = jumpscare_sounds[0]
-                    test_audio.volume = 0.1
-                    
-                    try:
-                        promise = test_audio.play()
-                        await asyncio.sleep(0.3)
-                        test_audio.pause()
-                        test_audio.currentTime = 0
-                        print(f"   ✅ JS test sound played! Context: {audio_context.state}")
-                    except Exception as e:
-                        print(f"   ⚠️ Test sound failed: {e}")
-                
-                audio_unlocked = True
-                print(f"🎉 Audio unlocked via JavaScript! Loaded {len(jumpscare_sounds)} sounds")
-                return
-        
-        # Fallback ke Pygame mixer untuk desktop
-        print("🔄 Using Pygame mixer (desktop mode)...")
-        
+        # Untuk Web (Pygbag), kita perlu memastikan mixer sudah init
         if not MIXER_AVAILABLE:
             print("❌ Mixer not available!")
             return
+
+        # Coba reset mixer jika di web (kadang membantu)
+        if IS_WEB:
+            print("🔄 Re-initializing mixer for Web...")
+            pygame.mixer.quit()
+            await asyncio.sleep(0.1)
+            pygame.mixer.init()
         
-        pygame.mixer.quit()
-        await asyncio.sleep(0.2)
-        
-        pygame.mixer.pre_init(22050, -16, 2, 512)
-        pygame.mixer.init(22050, -16, 2, 512)
-        pygame.mixer.set_num_channels(8)
-        
-        await asyncio.sleep(0.2)
-        
-        sound_files = [
-            'fuzzy-jumpscare-80560.wav',
-            'jump-scare-sound-2-82831.wav',
-            'five-nights-at-freddys-full-scream-sound_2.wav'
-        ]
-        
-        jumpscare_sounds.clear()
-        
-        for sound_path in sound_files:
-            await asyncio.sleep(0.15)
-            try:
-                snd = pygame.mixer.Sound(sound_path)
-                snd.set_volume(1.0)
-                jumpscare_sounds.append(snd)
-                print(f"   ✅ Loaded with Pygame: {sound_path}")
-            except Exception as e:
-                print(f"   ❌ Failed to load {sound_path}: {e}")
-        
-        if len(jumpscare_sounds) > 0:
+        # Reload sounds jika kosong (safety check)
+        if not jumpscare_sounds:
+            print("⚠️ Sounds not loaded, reloading...")
+            sound_files = [
+                'fuzzy-jumpscare-80560.wav',
+                'jump-scare-sound-2-82831.wav',
+                'five-nights-at-freddys-full-scream-sound_2.wav'
+            ]
+            for sound_path in sound_files:
+                try:
+                    snd = pygame.mixer.Sound(sound_path)
+                    snd.set_volume(1.0)
+                    jumpscare_sounds.append(snd)
+                except Exception as e:
+                    print(f"❌ Failed to load {sound_path}: {e}")
+
+        # Play test sound (silent/low volume) untuk trigger unlock
+        if jumpscare_sounds:
+            print("🔊 Playing test sound to unlock audio...")
             test_sound = jumpscare_sounds[0]
             test_sound.set_volume(0.1)
             test_sound.play()
             await asyncio.sleep(0.1)
             test_sound.stop()
-            print("   ✅ Pygame test sound played")
+            test_sound.set_volume(1.0) # Restore volume
+            print("   ✅ Test sound played")
         
         audio_unlocked = True
-        print(f"🎉 Audio unlocked via Pygame! Loaded {len(jumpscare_sounds)} sounds")
+        print(f"🎉 Audio unlocked! Loaded {len(jumpscare_sounds)} sounds")
         
     except Exception as e:
         print(f"💥 Audio unlock FAILED: {e}")
@@ -365,16 +286,6 @@ async def main():
         current_time = pygame.time.get_ticks()
         frame_count += 1
         
-        # Resume audio context every 60 frames (1 second) jika suspended
-        if IS_WEB and audio_unlocked and audio_context and frame_count % 60 == 0:
-            try:
-                import js
-                if audio_context.state == "suspended":
-                    print(f"⚠️ AudioContext suspended! Resuming...")
-                    audio_context.resume()
-            except:
-                pass
-        
         # Handle events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -392,18 +303,10 @@ async def main():
                         print("🔊 Force playing sound after keyboard unlock...")
                         try:
                             test = jumpscare_sounds[0]
-                            
-                            # Check if JS Audio or Pygame
-                            if IS_WEB and hasattr(test, 'play'):
-                                test.volume = 0.5
-                                test.currentTime = 0
-                                promise = test.play()
-                                print("✅ JS keyboard test playing!")
-                            else:
-                                pygame.mixer.unpause()
-                                test.set_volume(0.5)
-                                channel = test.play()
-                                print(f"✅ Pygame keyboard test: {channel}!")
+                            pygame.mixer.unpause()
+                            test.set_volume(0.5)
+                            channel = test.play()
+                            print(f"✅ Pygame keyboard test: {channel}!")
                         except Exception as e:
                             print(f"❌ Keyboard test failed: {e}")
                 else:
@@ -424,21 +327,13 @@ async def main():
                         print("🔊 Testing sound after mouse unlock...")
                         try:
                             test = jumpscare_sounds[0]
-                            
-                            # Check if JS Audio or Pygame
-                            if IS_WEB and hasattr(test, 'play'):
-                                test.volume = 0.5
-                                test.currentTime = 0
-                                promise = test.play()
-                                print("✅ JS Audio test playing!")
+                            pygame.mixer.unpause()
+                            test.set_volume(0.5)
+                            channel = test.play()
+                            if channel:
+                                print(f"✅ Pygame test on channel {channel}!")
                             else:
-                                pygame.mixer.unpause()
-                                test.set_volume(0.5)
-                                channel = test.play()
-                                if channel:
-                                    print(f"✅ Pygame test on channel {channel}!")
-                                else:
-                                    print("❌ No channel for test!")
+                                print("❌ No channel for test!")
                         except Exception as e:
                             print(f"❌ Manual test failed: {e}")
                 else:
@@ -492,37 +387,19 @@ async def main():
                             current_jumpscare_sound = random.choice(jumpscare_sounds)
                             print(f"🔊 Playing jumpscare sound...")
                             
-                            # Check if this is JS Audio or Pygame Sound
-                            if IS_WEB and hasattr(current_jumpscare_sound, 'play'):
-                                # CRITICAL: Resume audio context before play
-                                if audio_context:
-                                    try:
-                                        if audio_context.state == "suspended":
-                                            print("   - Resuming suspended AudioContext...")
-                                            audio_context.resume()
-                                            await asyncio.sleep(0.05)
-                                    except:
-                                        pass
-                                
-                                # JavaScript Audio element
-                                current_jumpscare_sound.volume = 1.0
-                                current_jumpscare_sound.currentTime = 0
-                                promise = current_jumpscare_sound.play()
-                                print(f"✅ JS Audio jumpscare playing! Context: {audio_context.state if audio_context else 'N/A'}")
+                            # Pygame Sound
+                            pygame.mixer.unpause()
+                            current_jumpscare_sound.set_volume(1.0)
+                            channel = current_jumpscare_sound.play()
+                            
+                            if channel:
+                                print(f"✅ Pygame jumpscare on channel: {channel}")
                             else:
-                                # Pygame Sound
-                                pygame.mixer.unpause()
-                                current_jumpscare_sound.set_volume(1.0)
+                                print("❌ No channel available!")
+                                pygame.mixer.stop()
+                                await asyncio.sleep(0.05)
                                 channel = current_jumpscare_sound.play()
-                                
-                                if channel:
-                                    print(f"✅ Pygame jumpscare on channel: {channel}")
-                                else:
-                                    print("❌ No channel available!")
-                                    pygame.mixer.stop()
-                                    await asyncio.sleep(0.05)
-                                    channel = current_jumpscare_sound.play()
-                                    print(f"🔄 Retry: {channel}")
+                                print(f"🔄 Retry: {channel}")
                                 
                         except Exception as e:
                             print(f"⚠️ Sound play failed: {e}")
