@@ -467,19 +467,5 @@ async def main():
                 win_text = font_huge.render("YOU WIN!", True, GREEN)
                 win_rect = win_text.get_rect(center=(SCREEN_WIDTH // 2, 60))
                 screen.blit(win_text, win_rect)
-                
-                time_text = font_large.render(f"Time: {final_time:.2f}s", True, WHITE)
-                time_rect = time_text.get_rect(center=(SCREEN_WIDTH // 2, 130))
-                screen.blit(time_text, time_rect)
-                
-                restart_text = font_large.render("Press R to Restart", True, WHITE)
-                restart_rect = restart_text.get_rect(center=(SCREEN_WIDTH // 2, ui_y + 50))
-                screen.blit(restart_text, restart_rect)
-        
-        pygame.display.flip()
-        await asyncio.sleep(0)  # CRITICAL for Pygbag
-    
-    pygame.quit()
-
 # ==== RUN ====
 asyncio.run(main())
