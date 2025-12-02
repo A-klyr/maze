@@ -136,45 +136,28 @@ async def unlock_audio():
         return
     
     try:
-        # Untuk Web (Pygbag), kita perlu memastikan mixer sudah init
         if not MIXER_AVAILABLE:
             print("❌ Mixer not available!")
             return
 
-        # Coba reset mixer jika di web (kadang membantu)
-        if IS_WEB:
-            print("🔄 Re-initializing mixer for Web...")
-            pygame.mixer.quit()
-            await asyncio.sleep(0.1)
-            pygame.mixer.init()
-        
-        # Reload sounds jika kosong (safety check)
-        if not jumpscare_sounds:
-            print("⚠️ Sounds not loaded, reloading...")
-            sound_files = [
-                'fuzzy-jumpscare-80560.wav',
-                'jump-scare-sound-2-82831.wav',
-                'five-nights-at-freddys-full-scream-sound_2.wav'
-            ]
-            for sound_path in sound_files:
-                try:
-                    snd = pygame.mixer.Sound(sound_path)
-                    snd.set_volume(1.0)
-                    jumpscare_sounds.append(snd)
-                except Exception as e:
-                    print(f"❌ Failed to load {sound_path}: {e}")
-
         # Play test sound (silent/low volume) untuk trigger unlock
+        # Di Pygbag, memainkan sound event sudah cukup untuk resume context
         if jumpscare_sounds:
             print("🔊 Playing test sound to unlock audio...")
-            test_sound = jumpscare_sounds[0]
-            test_sound.set_volume(0.1)
-            test_sound.play()
-            await asyncio.sleep(0.1)
-            test_sound.stop()
-            test_sound.set_volume(1.0) # Restore volume
-            print("   ✅ Test sound played")
+            try:
+                test_sound = jumpscare_sounds[0]
+                test_sound.set_volume(0.1)
+                test_sound.play()
+                await asyncio.sleep(0.1)
+                test_sound.stop()
+                test_sound.set_volume(1.0) # Restore volume
+                print("   ✅ Test sound played")
+            except Exception as e:
+                print(f"⚠️ Test sound failed: {e}")
+        else:
+            print("⚠️ No sounds loaded to play test sound")
         
+        # Always set to True if we reached here, assuming context is resumed or will be
         audio_unlocked = True
         print(f"🎉 Audio unlocked! Loaded {len(jumpscare_sounds)} sounds")
         
